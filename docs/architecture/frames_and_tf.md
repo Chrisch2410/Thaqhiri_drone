@@ -22,7 +22,7 @@ base_footprint ──(URDF, static)──> base_link ──> lidar_livox, ZED_X_
 
 `base_footprint` is the REP-105 body frame (FLU: x forward, y left, z up).
 
-## Known deviations
+## Conventions and known deviations
 
 - **`base_link` keeps Webots/Blender native axes.** The joint
   `base_footprint_to_base_link` uses `rpy="1.5708 0 1.5708"`, so `base_link` is
@@ -32,14 +32,14 @@ base_footprint ──(URDF, static)──> base_link ──> lidar_livox, ZED_X_
   (left, up, forward) accelerometer/gyro axes and covariances into FLU and stamps
   the result as `imu_link`; `cube_orange_imu_joint` undoes the `base_link`
   rotation so `imu_link` is aligned with `base_footprint`.
-- **Camera frames are not optical frames.** `camera_left` / `camera_right`
-  inherit `base_link` axes; there are no `*_optical_frame` links with
-  REP-103 optical axes (x right, y down, z forward).
-- **Stereo naming to verify.** In `base_link` axes (x = left), `camera_right` is
-  at x = +0.025 and `camera_left` at x = −0.025, i.e. "right" is on the
-  vehicle's left side. The unused `perception/config/stereo_disparity.yaml`
-  tuning has `min_disparity: -350`, which is consistent with a swapped pair.
-  Confirm against the PROTO before relying on stereo depth.
+- **Stereo cameras are upright optical frames.** `camera_left` / `camera_right`
+  are REP-103 optical frames (x right, y down, z forward), obtained from the
+  `ZED_X_Mini_camera` (left, up, forward) axes with `rpy="0 0 pi"`.
+  `camera_left` is on the vehicle's left; `fix_camera_info` sets the right
+  projection `Tx = -fx * 0.05`, so disparities are positive. Until this fix the
+  PROTO mounted the pair rolled 180° (upside-down images, "right" camera on the
+  vehicle's left); `test_sensor_frames_match_model_geometry` now guards the
+  PROTO/URDF agreement and the upright orientation.
 
 ## Frames outside the default launch
 

@@ -165,9 +165,12 @@ PROTO ThaqhiriDrone [
     DEF ZED_X_Mini_camera Solid {
       translation 0 0.38 0.14
       children [
+        # Upright stereo pair: rotation maps the Webots camera axes (x view,
+        # y left, z up) to body (z forward, x left, y up). camera_left sits on
+        # the vehicle's left (+x); keep in sync with thaqhiri_description.
         DEF camera_left Camera {
-          translation -0.025 0.003 0
-          rotation 0.5773509358560258 -0.577349935856137 0.577349935856137 2.09439
+          translation 0.025 0.003 0
+          rotation -0.5773502691896258 -0.5773502691896258 -0.5773502691896258 2.0944
           name "camera_left"
           fieldOfView 1.91986
           width 640
@@ -176,8 +179,8 @@ PROTO ThaqhiriDrone [
           far 20
         }
         DEF camera_right Camera {
-          translation 0.025 0.003 0
-          rotation 0.5773509358560258 -0.577349935856137 0.577349935856137 2.09439
+          translation -0.025 0.003 0
+          rotation -0.5773502691896258 -0.5773502691896258 -0.5773502691896258 2.0944
           name "camera_right"
           fieldOfView 1.91986
           width 640

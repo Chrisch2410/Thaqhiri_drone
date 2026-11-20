@@ -17,6 +17,8 @@ from builtin_interfaces.msg import Time
 
 from geometry_msgs.msg import Quaternion, Twist
 
+import numpy as np
+
 import pytest
 
 from scipy.spatial.transform import Rotation
@@ -97,13 +99,26 @@ def test_sensor_frames_match_model_geometry():
         float, origins['cube_orange_imu_joint'].get('rpy').split())))
     assert (body * imu).magnitude() < 1e-5
 
+    # Webots cameras look along +x with y left / z up; images are u = -y,
+    # v = -z. The URDF frame stamped on the images must be that optical frame.
+    webots_to_optical = Rotation.from_matrix([[0, 0, 1], [-1, 0, 0], [0, -1, 0]])
     proto = (package / 'protos/ThaqhiriDrone.proto').read_text()
-    positions = []
+    optical = {}
     for side in ('left', 'right'):
-        values = re.search(r'DEF camera_' + side + r' Camera \{\s+translation ([^\n]+)', proto)
-        actual = list(map(float, values.group(1).split()))
-        expected = list(map(float, origins[
-            f'ZED_X_Mini_camera_camera_{side}_joint'].get('xyz').split()))
-        assert actual == pytest.approx(expected)
-        positions.append(actual)
-    assert [right-left for left, right in zip(*positions)] == pytest.approx([0.05, 0, 0])
+        values = re.search(
+            r'DEF camera_' + side + r' Camera \{\s+translation ([^\n]+)\s+rotation ([^\n]+)',
+            proto)
+        translation = list(map(float, values.group(1).split()))
+        *axis, angle = map(float, values.group(2).split())
+        camera = Rotation.from_rotvec(angle * np.asarray(axis) / np.linalg.norm(axis))
+        joint = origins[f'ZED_X_Mini_camera_camera_{side}_joint']
+        urdf = Rotation.from_euler('xyz', list(map(float, joint.get('rpy').split())))
+        assert translation == pytest.approx(list(map(float, joint.get('xyz').split())))
+        assert ((camera * webots_to_optical).inv() * urdf).magnitude() < 1e-4
+        # Images must be upright: the optical y axis (image down) is body down.
+        assert (body * urdf).apply([0, 1, 0]) == pytest.approx([0, 0, -1], abs=1e-4)
+        optical[side] = (urdf, np.asarray(translation))
+    # Standard stereo: the right camera is +baseline along the left optical x.
+    left, origin = optical['left']
+    baseline = left.inv().apply(optical['right'][1] - origin)
+    assert baseline == pytest.approx([0.05, 0, 0], abs=1e-6)

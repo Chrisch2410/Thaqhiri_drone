@@ -262,15 +262,16 @@
   <joint name="ZED_X_Mini_camera_camera_right_joint" type="fixed">
     <parent link="ZED_X_Mini_camera"/>
     <child link="camera_right"/>
-    <!-- Optical frame: x right, y down, z forward (not Webots Camera FLU axes). -->
-    <origin xyz="0.025 0.003 0" rpy="0 0 0"/>
+    <!-- Optical frame (x right, y down, z forward): yaw pi flips the parent's
+         (left, up, forward) axes. camera_right is on the vehicle's right. -->
+    <origin xyz="-0.025 0.003 0" rpy="0 0 3.14159265"/>
   </joint>
   <link name="camera_left">
   </link>
   <joint name="ZED_X_Mini_camera_camera_left_joint" type="fixed">
     <parent link="ZED_X_Mini_camera"/>
     <child link="camera_left"/>
-    <origin xyz="-0.025 0.003 0" rpy="0 0 0"/>
+    <origin xyz="0.025 0.003 0" rpy="0 0 3.14159265"/>
   </joint>
   <link name="cube_orange">
     <visual>
