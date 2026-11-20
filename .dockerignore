@@ -1,5 +1,6 @@
-# docker/Dockerfile.sim only needs the package manifests and the entrypoint;
-# the workspace itself is bind-mounted at runtime.
+# docker/Dockerfile.sim only needs the package manifests, the entrypoint and
+# the container Python fixes; the workspace itself is bind-mounted at runtime.
 *
 !docker/entrypoint.sh
+!docker/python/
 !src/**/package.xml

@@ -1,5 +1,11 @@
-# Usage (from the repository root):
-#   docker compose -f docker/docker-compose.sim.yml up -d --build
+# Usage (from the repository root). HOST_PLATFORM selects docker/platforms/*.yml:
+#   linux   (default) native Linux host; Webots in the container on the host X server.
+#   wsl     Windows + Docker Desktop, run from the WSL (Ubuntu) shell; Webots in
+#           the container, window through WSLg, GPU through /dev/dxg.
+#   windows Windows + Docker Desktop, run from the WSL shell; Webots runs natively
+#           on Windows (tools/webots_host/start_webots.cmd), ROS 2 connects over TCP.
+#
+#   HOST_PLATFORM=wsl docker compose -f docker/docker-compose.sim.yml up -d --build
 #   docker compose -f docker/docker-compose.sim.yml exec thaqhiri_sim bash
 # ArduPilot SITL is opt-in:
 #   docker compose -f docker/docker-compose.sim.yml --profile ardupilot up -d
@@ -23,12 +29,14 @@ services:
       # ArduPilot workspace checked out next to this repository.
       - ../../ardu_ws:/home/ubuntu/ros_ws
   thaqhiri_sim:
+    extends:
+      file: platforms/${HOST_PLATFORM:-linux}.yml
+      service: platform
     build:
       context: ..
       dockerfile: docker/Dockerfile.sim
     image: thaqhiri_sim
     container_name: thaqhiri_sim_dev_env
-    gpus: all
     # network_mode: "host"
     networks:
       - drone_net
@@ -40,25 +48,12 @@ services:
     command: bash
     environment:
       - ROS_DOMAIN_ID=0
-      - DISPLAY=${DISPLAY} # Forward X11 display
-      - NVIDIA_DRIVER_CAPABILITIES=all #compute,utility,graphics # Allow GPU access
-      - NVIDIA_VISIBLE_DEVICES=all # Expose all GPUs
       - QT_X11_NO_MITSHM=1
       - WEBOTS_HOME=/usr/local/webots
       - SITL_UDP_IP=ardupilot_sitl
-    devices:
-      - "/dev/dri:/dev/dri" # Allow OpenGL rendering
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix
       - ..:/home/ubuntu/ros_ws
       - webots_config:/home/ubuntu/.config/Cyberbotics
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [ gpu, utility ]
 
 volumes:
   webots_config:

@@ -1,0 +1,21 @@
+# HOST_PLATFORM=wsl: Windows + Docker Desktop (WSL2 backend). Run compose from
+# the WSL distro shell (e.g. Ubuntu) so these paths are that distro's WSLg
+# sockets and GPU libraries. GUI windows appear on the Windows desktop.
+services:
+  platform:
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
+      - XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir
+      - PULSE_SERVER=/mnt/wslg/PulseServer
+      # Hardware OpenGL through Mesa's D3D12 driver; without it Mesa falls back
+      # to llvmpipe (CPU). Set WSL_GPU_ADAPTER to match another GPU vendor.
+      - LD_LIBRARY_PATH=/usr/lib/wsl/lib
+      - GALLIUM_DRIVER=d3d12
+      - MESA_D3D12_DEFAULT_ADAPTER_NAME=${WSL_GPU_ADAPTER:-NVIDIA}
+    devices:
+      - "/dev/dxg:/dev/dxg"
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /mnt/wslg:/mnt/wslg
+      - /usr/lib/wsl:/usr/lib/wsl:ro

@@ -1,0 +1,20 @@
+# HOST_PLATFORM=linux: native Linux host with an X server and an NVIDIA GPU.
+# Allow local X clients first: xhost +local:
+services:
+  platform:
+    gpus: all
+    environment:
+      - DISPLAY=${DISPLAY}
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - NVIDIA_VISIBLE_DEVICES=all
+    devices:
+      - "/dev/dri:/dev/dri" # OpenGL rendering
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu, utility ]

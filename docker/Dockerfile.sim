@@ -58,6 +58,11 @@ RUN apt-get update \
     && rosdep install --from-paths /tmp/deps --ignore-src --rosdistro jazzy -y \
     && rm -rf /var/lib/apt/lists/* /tmp/deps
 
+# webots_ros2 mistakes Docker Desktop's WSL2 kernel for a WSL distro; see
+# docker/python/thaqhiri_webots_wsl_fix.py.
+COPY docker/python/thaqhiri_webots_wsl_fix.py docker/python/thaqhiri_webots_wsl_fix.pth \
+     /usr/local/lib/python3.12/dist-packages/
+
 # 4. Configuración de Usuario No-Root
 ARG USERNAME=ubuntu
 ARG USER_UID=1000
