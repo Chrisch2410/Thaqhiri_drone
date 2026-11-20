@@ -87,7 +87,7 @@ The current Madgwick gain is **0.01**. Previous tests showed that the earlier ga
 
 ## Stereo Vision and LiDAR
 
-The robot contains two 640 × 480 cameras with a **5 cm stereo baseline**. Webots images are converted from BGRA to BGR, and the camera calibration information is corrected before being sent to `stereo_image_proc`.
+The robot contains two upright 640 × 480 cameras with a **5 cm stereo baseline** (`camera_left` on the vehicle's left, standard positive disparity). Webots images are converted from BGRA to BGR, and the camera calibration information is corrected before being sent to `stereo_image_proc`.
 
 The stereo processing produces rectified images and disparity data.
 
@@ -179,9 +179,12 @@ src/
   thaqhiri_bringup/       thaqhiri_sim.launch.py composes everything above
   third_party/ardupilot_msgs/   vendored ArduPilot interfaces (GPL-3.0)
 docker/                   Dockerfile.sim, Dockerfile.ardupilot_sitl, compose, entrypoint
+  platforms/              per-host compose settings (linux, wsl, windows)
+  python/                 container fix: webots_ros2 must not treat Docker Desktop as WSL
 tools/evaluation/         SIL runner, criteria, summaries, attitude replay
 tools/blender/            Cerro Rico Blender -> Webots exporter
 tools/env/                pinned Python requirements for a native setup
+tools/webots_host/        start Webots natively on Windows (HOST_PLATFORM=windows)
 docs/                     simulation reports and architecture notes
 ```
 
@@ -209,16 +212,35 @@ Frame conventions and known REP-105 deviations are documented in
 
 ## Quickstart
 
-Docker (from the repository root):
+Docker (from the repository root). `HOST_PLATFORM` selects the host setup in
+[docker/platforms/](docker/platforms):
+
+| `HOST_PLATFORM` | Host | Webots runs | Run compose from |
+|---|---|---|---|
+| `linux` (default) | Native Linux, X11, NVIDIA | in the container | Linux shell (`xhost +local:` first) |
+| `wsl` | Windows + Docker Desktop | in the container, window via WSLg, GPU via D3D12 | the WSL distro shell (e.g. Ubuntu) |
+| `windows` | Windows + Docker Desktop | natively on Windows | the WSL distro shell |
 
 ```bash
-docker compose -f docker/docker-compose.sim.yml up -d --build
+HOST_PLATFORM=wsl docker compose -f docker/docker-compose.sim.yml up -d --build
 docker compose -f docker/docker-compose.sim.yml exec thaqhiri_sim bash
 # inside the container
 colcon build --symlink-install
 source install/setup.bash
 ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py
 ```
+
+With `HOST_PLATFORM=windows`, start Webots R2025a on Windows before the launch
+(it opens the world from this checkout and listens on port 1234):
+
+```bat
+tools\webots_host\start_webots.cmd cerro_rico.wbt
+```
+
+The container sets `THAQHIRI_WEBOTS_HOST=host.docker.internal`, so the launch
+connects to that Webots over TCP instead of starting its own; `world` and `gui`
+are then chosen on the Windows side. Allow Webots through the Windows firewall
+if prompted.
 
 Native ROS 2 Jazzy + Webots R2025a:
 
@@ -231,8 +253,9 @@ source install/setup.bash
 ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py
 ```
 
-Launch arguments: `world` (`mine_test_arena.wbt` or `cerro_rico.wbt`), `gui`, `rtabmap`,
-`rtabmap_viz`, `database_path`, `imu_filter_gain`, `icp_max_translation`, `icp_odom_args`.
+Launch arguments: `world` (`mine_test_arena.wbt` or `cerro_rico.wbt`), `gui`, `webots_host`
+(running Webots to connect to; empty starts one), `rtabmap`, `rtabmap_viz`, `database_path`,
+`imu_filter_gain`, `icp_max_translation`, `icp_odom_args`.
 Fly with `ros2 run thaqhiri_navigation teleop_drone` in another terminal.
 
 Tests run per package: `colcon test --packages-select thaqhiri_sim_webots thaqhiri_perception thaqhiri_navigation && colcon test-result --verbose`.
