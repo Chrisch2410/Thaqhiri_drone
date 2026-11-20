@@ -378,7 +378,7 @@ def main():
         launch=['ros2','launch','thaqhiri_bringup','thaqhiri_sim.launch.py','world:=cerro_rico.wbt',
                 'icp_max_translation:='+str(args.icp_max_translation),
                 'imu_filter_gain:='+str(args.imu_filter_gain),
-                'gui:=false','rtabmap_viz:=false','database_path:='+str(output/'rtabmap.db')]
+                'gui:=false','rviz:=false','rtabmap_viz:=false','database_path:='+str(output/'rtabmap.db')]
         log=(output/'launch.log').open('w');logs.append(log)
         processes.append(subprocess.Popen(launch,stdout=log,stderr=subprocess.STDOUT,start_new_session=True))
         env=os.environ.copy();env['WEBOTS_HOME']='/opt/ros/jazzy';env['WEBOTS_CONTROLLER_URL']='ipc://1234/SILObserver'

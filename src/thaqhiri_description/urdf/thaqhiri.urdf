@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot name="thaqhiri">
   <!-- Webots driver/plugin configuration lives in
-       thaqhiri_sim_webots/resource/webots_plugins.urdf. -->
+       thaqhiri_sim_webots/resource/webots_plugins.urdf.xacro. -->
   <!-- KNOWN ISSUE: base_link keeps the Webots/Blender axes (x=left, y=up,
        z=forward) via the rpy below instead of REP-105 FLU. See
        docs/architecture/frames_and_tf.md before changing it. -->

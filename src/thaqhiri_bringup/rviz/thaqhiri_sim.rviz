@@ -1,0 +1,104 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Value: true
+      Reference Frame: <Fixed Frame>
+      Cell Size: 1
+      Plane Cell Count: 40
+    - Class: rviz_default_plugins/RobotModel
+      Name: Drone
+      Enabled: true
+      Value: true
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+        Depth: 1
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: false
+      Value: false
+    - Class: rviz_default_plugins/PointCloud2
+      Name: LiDAR scan
+      Enabled: true
+      Value: true
+      Topic:
+        Value: /drone/lidar_livox/point_cloud
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: AxisColor
+      Axis: Z
+      Decay Time: 0
+    - Class: rviz_default_plugins/PointCloud2
+      Name: RTAB-Map cloud
+      Enabled: true
+      Value: true
+      Topic:
+        Value: /drone/cloud_map
+        Depth: 1
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: AxisColor
+      Axis: Z
+      Decay Time: 0
+    - Class: rviz_default_plugins/Odometry
+      Name: ICP odometry
+      Enabled: true
+      Value: true
+      Topic:
+        Value: /drone/odom
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+      Keep: 100
+    - Class: rviz_default_plugins/Image
+      Name: Left camera (rectified)
+      Enabled: true
+      Value: true
+      Topic:
+        Value: /drone/left/image_rect_color
+        Depth: 1
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+  Global Options:
+    Fixed Frame: map
+    Frame Rate: 15
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Target Frame: base_footprint
+      Distance: 8
+      Pitch: 0.6
+      Yaw: 0.8
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+Window Geometry:
+  Width: 1400
+  Height: 900

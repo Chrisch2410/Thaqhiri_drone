@@ -234,7 +234,11 @@ PROTO ThaqhiriDrone [
       numberOfLayers 40
       minRange 0.1
       maxRange 40
-      type "rotating"
+      # "fixed" renders the 360-degree cylinder once per scan (10 Hz). A
+      # "rotating" Lidar renders it on every 8 ms step and keeps only the
+      # swept slice (~10x the GPU cost). Same 40x1000 cloud; all points of a
+      # scan share one instant, so there is no in-scan motion distortion.
+      type "fixed"
       noise 0.0001
       resolution 0.001
     }

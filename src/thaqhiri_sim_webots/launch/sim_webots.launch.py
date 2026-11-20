@@ -7,8 +7,12 @@
 - a host name or IP: Webots is already running there with the same world
   (e.g. natively on Windows via tools/webots_host/start_webots.cmd) and the
   controllers connect to it over TCP.
+
+``camera_rate`` (Hz) is the stereo camera publish rate; webots_ros2_driver
+expands resource/webots_plugins.urdf.xacro with it in either mode.
 """
 
+import json
 import os
 
 from ament_index_python.packages import get_package_prefix, get_package_share_directory
@@ -36,7 +40,7 @@ def _shutdown_if_running(event, context):
     return [launch.actions.EmitEvent(event=launch.events.Shutdown())]
 
 
-def _local_webots(package_dir, robot_description):
+def _local_webots(package_dir, robot_description, xacro_mappings):
     """Start Webots here; upstream helpers choose IPC or WSL transport."""
     webots = WebotsLauncher(
         world=PathJoinSubstitution([
@@ -51,6 +55,7 @@ def _local_webots(package_dir, robot_description):
         port=WEBOTS_PORT,
         parameters=[
             {'robot_description': robot_description},
+            {'xacro_mappings': xacro_mappings},
             {'use_sim_time': True},
         ],
     )
@@ -62,7 +67,7 @@ def _local_webots(package_dir, robot_description):
     return owned, supervisor, drone
 
 
-def _remote_webots(host, robot_description):
+def _remote_webots(host, robot_description, xacro_mappings):
     """Connect to a Webots that is already running on ``host`` over TCP.
 
     Mirrors Ros2SupervisorLauncher and WebotsController, which only use TCP
@@ -89,6 +94,7 @@ def _remote_webots(host, robot_description):
             f'--port={WEBOTS_PORT}',
             'ros2', '--ros-args',
             '-p', f'robot_description:={robot_description}',
+            '-p', f'xacro_mappings:={json.dumps(xacro_mappings)}',
             '-p', 'use_sim_time:=true',
         ],
         name='webots_controller_drone',
@@ -100,12 +106,21 @@ def _remote_webots(host, robot_description):
 
 def _webots_and_controllers(context):
     package_dir = get_package_share_directory('thaqhiri_sim_webots')
-    robot_description = os.path.join(package_dir, 'resource', 'webots_plugins.urdf')
+    robot_description = os.path.join(package_dir, 'resource', 'webots_plugins.urdf.xacro')
+    camera_rate = LaunchConfiguration('camera_rate').perform(context).strip()
+    try:
+        valid_rate = float(camera_rate) > 0
+    except ValueError:
+        valid_rate = False
+    if not valid_rate:
+        # webots_ros2 would atof() it: a typo would silently stop the cameras.
+        raise ValueError(f'camera_rate must be a positive number of Hz, got {camera_rate!r}')
+    xacro_mappings = [f'camera_rate:={camera_rate}']
     host = LaunchConfiguration('webots_host').perform(context).strip()
     if host:
-        owned, supervisor, drone = _remote_webots(host, robot_description)
+        owned, supervisor, drone = _remote_webots(host, robot_description, xacro_mappings)
     else:
-        owned, supervisor, drone = _local_webots(package_dir, robot_description)
+        owned, supervisor, drone = _local_webots(package_dir, robot_description, xacro_mappings)
 
     adapters = [
         Node(
@@ -145,5 +160,9 @@ def generate_launch_description():
             default_value=EnvironmentVariable('THAQHIRI_WEBOTS_HOST', default_value=''),
             description='Host of an already running Webots (e.g. host.docker.internal); '
                         'empty starts Webots locally. world/gui then do not apply.'),
+        DeclareLaunchArgument(
+            'camera_rate', default_value='12.5',
+            description='Stereo camera publish rate in Hz, rounded by Webots to a '
+                        'multiple of the 8 ms step (12.5 = 80 ms, 25 = 40 ms)'),
         OpaqueFunction(function=_webots_and_controllers),
     ])

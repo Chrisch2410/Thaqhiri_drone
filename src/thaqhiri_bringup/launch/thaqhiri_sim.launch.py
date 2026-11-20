@@ -9,8 +9,10 @@ from launch.actions import (
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessIO
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import (
+    EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution, PythonExpression)
 
+from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 # Same marker webots_ros2_driver's WaitForControllerConnection waits for. That
@@ -48,9 +50,10 @@ def _start_when_controller_connects(actions):
 
 
 def generate_launch_description():
-    """Compose simulator, robot model, perception and gated SLAM."""
+    """Compose simulator, robot model, perception, gated SLAM and viewers."""
+    rtabmap = LaunchConfiguration('rtabmap')
     slam = GroupAction(
-        condition=IfCondition(LaunchConfiguration('rtabmap')),
+        condition=IfCondition(rtabmap),
         actions=[_include('thaqhiri_perception', 'slam.launch.py', {
             'use_sim_time': 'true',
             'database_path': LaunchConfiguration('database_path'),
@@ -58,10 +61,31 @@ def generate_launch_description():
             'icp_odom_args': LaunchConfiguration('icp_odom_args'),
         })],
     )
+    rviz = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        condition=IfCondition(LaunchConfiguration('rviz')),
+        arguments=[
+            '-d', PathJoinSubstitution([
+                FindPackageShare('thaqhiri_bringup'), 'rviz', 'thaqhiri_sim.rviz']),
+            # Without RTAB-Map nothing publishes map/odom; the URDF root still exists.
+            '-f', PythonExpression([
+                "'map' if '", rtabmap, "'.lower() == 'true' else 'base_footprint'"]),
+        ],
+        parameters=[{'use_sim_time': True}],
+        output='screen',
+    )
 
     return LaunchDescription([
         DeclareLaunchArgument('rtabmap', default_value='true'),
-        DeclareLaunchArgument('gui', default_value='true'),
+        DeclareLaunchArgument('gui', default_value='true',
+                              description='Webots window; false runs it without rendering'),
+        DeclareLaunchArgument('rviz', default_value='true', description='Start RViz2'),
+        DeclareLaunchArgument(
+            'camera_rate', default_value='12.5',
+            description='Stereo camera rate in Hz; the period is rounded to a multiple '
+                        'of the 8 ms Webots step (12.5 = 80 ms, 25 = 40 ms)'),
         DeclareLaunchArgument('world', default_value='mine_test_arena.wbt',
                               description='World filename, e.g. cerro_rico.wbt'),
         DeclareLaunchArgument(
@@ -69,7 +93,8 @@ def generate_launch_description():
             default_value=EnvironmentVariable('THAQHIRI_WEBOTS_HOST', default_value=''),
             description='Host of an already running Webots; empty starts it locally'),
         DeclareLaunchArgument('database_path', default_value='~/.ros/rtabmap.db'),
-        DeclareLaunchArgument('rtabmap_viz', default_value='true'),
+        DeclareLaunchArgument('rtabmap_viz', default_value='true',
+                              description="Start RTAB-Map's own viewer"),
         DeclareLaunchArgument(
             'imu_filter_gain', default_value='0.01',
             description='Madgwick gain for moving flight; 0.1 restores the old tuning'),
@@ -97,6 +122,7 @@ def generate_launch_description():
             'world': LaunchConfiguration('world'),
             'gui': LaunchConfiguration('gui'),
             'webots_host': LaunchConfiguration('webots_host'),
+            'camera_rate': LaunchConfiguration('camera_rate'),
         }),
         _include('thaqhiri_description', 'description.launch.py', {
             'use_sim_time': 'true',
@@ -106,4 +132,5 @@ def generate_launch_description():
             'imu_filter_gain': LaunchConfiguration('imu_filter_gain'),
         }),
         _start_when_controller_connects([slam]),
+        rviz,
     ])

@@ -1,8 +1,23 @@
 <?xml version="1.0"?>
-<!-- Webots-only driver configuration, loaded by WebotsController.
+<!-- Webots-only driver configuration. webots_ros2_driver expands this xacro
+     itself (xacro_mappings from sim_webots.launch.py).
      Geometry and TF live in thaqhiri_description/urdf/thaqhiri.urdf. -->
-<robot name="thaqhiri">
+<robot name="thaqhiri" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Without updateRate webots_ros2 renders and publishes both cameras on
+       every 8 ms step (125 Hz), which dominated the simulation cost. Webots
+       rounds the period to a multiple of basicTimeStep: 12.5 Hz = 80 ms. -->
+  <xacro:arg name="camera_rate" default="12.5"/>
   <webots>
+        <device reference="camera_left" type="Camera">
+            <ros>
+                <updateRate>$(arg camera_rate)</updateRate>
+            </ros>
+        </device>
+        <device reference="camera_right" type="Camera">
+            <ros>
+                <updateRate>$(arg camera_rate)</updateRate>
+            </ros>
+        </device>
         <plugin type="thaqhiri_sim_webots.drone_driver.DroneDriver" />
         <plugin type="webots_ros2_driver::Ros2IMU">
             <enabled>True</enabled>
