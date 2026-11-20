@@ -1,0 +1,13 @@
+# colcon
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Local runs (tools/evaluation/run_sil.py, RTAB-Map databases)
+experiment_data/
+*.db
