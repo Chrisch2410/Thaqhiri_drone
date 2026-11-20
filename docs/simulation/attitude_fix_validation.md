@@ -29,7 +29,7 @@ gate remains 0.2 m; tracking continuity is not obtained by merely loosening that
 
 ## Offline evidence
 
-`scripts/replay_attitude.py` reconstructs angular rate and specific force from
+`tools/evaluation/replay_attitude.py` reconstructs angular rate and specific force from
 the two saved world-pose trajectories. It includes the Cube sensor lever arm,
 resamples at 8 ms, and evaluates the two gains against identical reconstructed
 sensor input. Attitude error below is roll/pitch RMSE over 30–100 s:
@@ -48,7 +48,7 @@ are not identified by these reconstructions. This is a simulation-specific
 tuning change, not a calibration for a real aircraft.
 
 The independent quaternion reference used for validation is in
-`thaiquiri_webots/imu_validation.py`; runtime still uses the installed
+`thaqhiri_perception/imu_validation.py`; runtime still uses the installed
 `imu_filter_madgwick` implementation. Tests cover dynamic translational
 specific force, retained static tilt/bias correction, gyro-only propagation,
 sensor geometry, invalid inputs, and the actual merger callback guards.
@@ -58,8 +58,8 @@ replacement ROS executor, transport, or synchronizer.
 Reproduce the offline comparison from a sourced package environment:
 
 ```bash
-python scripts/replay_attitude.py /path/to/nominal /path/to/gt --output experiment_data/attitude_reconstruction.json
-python -m pytest -q src/thaiquiri_webots/test/test_control.py src/thaiquiri_webots/test/test_imu_validation.py src/thaiquiri_webots/test/test_sil_route.py src/thaiquiri_webots/test/test_sil_metrics.py src/thaiquiri_webots/test/test_cerro_assets.py
+python tools/evaluation/replay_attitude.py /path/to/nominal /path/to/gt --output experiment_data/attitude_reconstruction.json
+python -m pytest -q src/thaqhiri_sim_webots/test/test_drone_driver.py src/thaqhiri_perception/test/test_imu_merger_node.py src/thaqhiri_perception/test/test_imu_validation.py src/thaqhiri_navigation/test/test_sil_route.py src/thaqhiri_navigation/test/test_sil_metrics.py src/thaqhiri_sim_webots/test/test_cerro_assets.py
 ```
 
 ## Acceptance and remaining validation

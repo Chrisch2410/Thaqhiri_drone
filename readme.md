@@ -1,8 +1,8 @@
 # Thaqhiri Dron
 
-This repository is a **ROS 2 Jazzy simulation workspace for the Thaiquiri quadrotor**, designed for testing autonomous aerial robotics in mine-like environments using **Webots**. The main objective is to develop and validate flight control, inertial sensing, stereo vision, LiDAR-based localization, and 3D mapping before moving toward integration with a real or simulated ArduPilot flight stack.
+This repository is a **ROS 2 Jazzy simulation workspace for the Thaqhiri quadrotor**, designed for testing autonomous aerial robotics in mine-like environments using **Webots**. The main objective is to develop and validate flight control, inertial sensing, stereo vision, LiDAR-based localization, and 3D mapping before moving toward integration with a real or simulated ArduPilot flight stack.
 
-The repository directory is named `thaqhiri`, while the ROS package and robot assets use the name `thaiquiri`. The main ROS 2 package is therefore `thaiquiri_webots`.
+The workspace is split into `thaqhiri_*` ROS 2 packages (see [Repository Layout](#repository-layout)); the full simulation starts from `thaqhiri_bringup`.
 
 ## Main Features
 
@@ -130,7 +130,7 @@ cerro_rico.wbt
 It can be launched using:
 
 ```bash
-ros2 launch thaiquiri_webots drone_launch.py world:=cerro_rico.wbt
+ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py world:=cerro_rico.wbt
 ```
 
 An automated SIL experiment is provided to test stabilization, mapping, trajectory behavior, and environmental interaction inside the mine.
@@ -166,19 +166,79 @@ The repository does not yet simulate:
 
 Implementing the gas sensing system is therefore an important future extension of the simulation.
 
-## Main ROS Package
+## Repository Layout
 
-The `thaiquiri_webots` package contains the simulation and processing components.
+```text
+src/
+  thaqhiri_description/   URDF (geometry, static TF) + description.launch.py
+  thaqhiri_sim_webots/    Webots worlds/PROTOs, DroneDriver plugin, camera adapters,
+                          SIL ground-truth observer + sim_webots.launch.py
+  thaqhiri_perception/    IMU merger, Madgwick, stereo_image_proc, RTAB-Map
+                          (perception.launch.py, slam.launch.py)
+  thaqhiri_navigation/    teleop, SIL route/metrics, ArduPilot bridges
+  thaqhiri_bringup/       thaqhiri_sim.launch.py composes everything above
+  third_party/ardupilot_msgs/   vendored ArduPilot interfaces (GPL-3.0)
+docker/                   Dockerfile.sim, Dockerfile.ardupilot_sitl, compose, entrypoint
+tools/evaluation/         SIL runner, criteria, summaries, attitude replay
+tools/blender/            Cerro Rico Blender -> Webots exporter
+tools/env/                pinned Python requirements for a native setup
+docs/                     simulation reports and architecture notes
+```
 
-Important modules include:
+There is no `thaqhiri_interfaces` package yet: every node uses standard ROS
+messages. Create it (ament_cmake + rosidl) together with the first node that
+publishes project-specific data, e.g. gas readings. `third_party/ardupilot_msgs`
+is ArduPilot's own interface package, not a place for project messages.
 
-- `drone_driver.py` — active quadrotor controller.
-- `teleop_drone.py` — keyboard command publisher.
-- `imu_merger_node.py` — Cube IMU synchronization and coordinate transformation.
-- `bgra_to_bgr.py` — camera image conversion.
-- `fix_camera_info.py` — stereo calibration correction.
-- `sil_observer.py` — ground-truth observer used only for SIL evaluation.
-- `sil_metrics.py` — trajectory and map error calculations.
-- `odom_to_ardupilot.py` — experimental external-navigation bridge.
-- `gps_pose_publisher.py` — incomplete experimental ArduPilot GPS helper.
-- `drone_driver_3.py` — inactive experimental ArduPilot/Webots controller.
+Important modules:
+
+- `thaqhiri_sim_webots/drone_driver.py` — active quadrotor controller (Webots plugin).
+- `thaqhiri_sim_webots/bgra_to_bgr.py` — camera image conversion.
+- `thaqhiri_sim_webots/fix_camera_info.py` — stereo calibration correction.
+- `thaqhiri_sim_webots/sil_observer.py` — ground-truth observer used only for SIL evaluation.
+- `thaqhiri_sim_webots/webots_vehicle.py` — Webots/ArduPilot SITL bridge (not imported by any node); its `AP_FLAKE8_CLEAN` marker indicates it was copied from ArduPilot (GPL-3.0).
+- `thaqhiri_perception/imu_merger_node.py` — Cube IMU synchronization and coordinate transformation.
+- `thaqhiri_perception/imu_validation.py` — reference attitude filter for offline validation.
+- `thaqhiri_navigation/teleop_drone.py` — keyboard command publisher.
+- `thaqhiri_navigation/sil_route.py`, `sil_metrics.py` — SIL route fixture and scoring.
+- `thaqhiri_navigation/odom_to_ardupilot.py` — experimental external-navigation bridge.
+- `thaqhiri_navigation/gps_pose_publisher.py` — incomplete experimental ArduPilot GPS helper.
+
+Frame conventions and known REP-105 deviations are documented in
+[docs/architecture/frames_and_tf.md](docs/architecture/frames_and_tf.md).
+
+## Quickstart
+
+Docker (from the repository root):
+
+```bash
+docker compose -f docker/docker-compose.sim.yml up -d --build
+docker compose -f docker/docker-compose.sim.yml exec thaqhiri_sim bash
+# inside the container
+colcon build --symlink-install
+source install/setup.bash
+ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py
+```
+
+Native ROS 2 Jazzy + Webots R2025a:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r tools/env/requirements.txt
+python -m colcon build --symlink-install --packages-up-to thaqhiri_bringup
+source install/setup.bash
+ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py
+```
+
+Launch arguments: `world` (`mine_test_arena.wbt` or `cerro_rico.wbt`), `gui`, `rtabmap`,
+`rtabmap_viz`, `database_path`, `imu_filter_gain`, `icp_max_translation`, `icp_odom_args`.
+Fly with `ros2 run thaqhiri_navigation teleop_drone` in another terminal.
+
+Tests run per package: `colcon test --packages-select thaqhiri_sim_webots thaqhiri_perception thaqhiri_navigation && colcon test-result --verbose`.
+
+## License
+
+Apache-2.0 (see `LICENSE`), except `src/third_party/ardupilot_msgs` (GPL-3.0) and
+`thaqhiri_sim_webots/webots_vehicle.py`, which appears to be copied from ArduPilot's
+GPL-3.0 Webots example and has no license header.
