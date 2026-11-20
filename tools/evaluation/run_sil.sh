@@ -2,7 +2,7 @@
 # Build and run the corrected SIL pipeline in an existing ROS Jazzy setup.
 set -eo pipefail
 
-project_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+project_dir="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 cd "$project_dir"
 
 if [[ ! -f /opt/ros/jazzy/setup.bash ]]; then
@@ -28,8 +28,8 @@ if [[ -z "${WEBOTS_HOME:-}" || ! -x "$WEBOTS_HOME/webots" ]]; then
 fi
 
 python3 -c 'from colcon_core.command import main; raise SystemExit(main())' build --symlink-install \
-  --packages-select ardupilot_msgs thaiquiri_webots \
+  --packages-up-to thaqhiri_bringup \
   --cmake-args "-DPython3_EXECUTABLE=$(command -v python3)" \
                "-DPYTHON_EXECUTABLE=$(command -v python3)"
 source install/setup.bash
-exec python3 scripts/run_sil.py "$@"
+exec python3 tools/evaluation/run_sil.py "$@"

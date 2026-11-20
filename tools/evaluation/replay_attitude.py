@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from thaiquiri_webots.imu_validation import reconstruction_errors
+from thaqhiri_perception.imu_validation import reconstruction_errors
 
 
 def main():

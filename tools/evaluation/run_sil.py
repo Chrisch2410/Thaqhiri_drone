@@ -30,12 +30,14 @@ from sensor_msgs_py import point_cloud2
 from std_msgs.msg import Int32
 from tf2_msgs.msg import TFMessage
 from webots_ros2_msgs.msg import FloatStamped
-from thaiquiri_webots.sil_metrics import (
+from thaqhiri_navigation.sil_metrics import (
     horizontal_speed_summary, odometry_tracking, summarize_samples,
     surface_error, trajectory_error)
-from thaiquiri_webots.sil_route import RouteController
+from thaqhiri_navigation.sil_route import RouteController
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
+CRITERIA = ROOT/'tools/evaluation/sil_criteria.json'
+MINE_ASSETS = ROOT/'src/thaqhiri_sim_webots/protos/cerro_rico'
 
 
 def stamp(msg):
@@ -251,7 +253,7 @@ class Trial:
         if self.map_cloud is not None and len(self.map_cloud) and alignment is not None and self.map_frame == 'map' and self.map_odom is not None:
             r,t = alignment; mr,mt = self.map_odom
             world = r.apply(mr.inv().apply(self.map_cloud-mt))+t
-            reference = np.load(ROOT/'src/thaiquiri_webots/webots_world/protos/cerro_rico/surface_reference.npz')['points']
+            reference = np.load(MINE_ASSETS/'surface_reference.npz')['points']
             surface = surface_error(world, reference)
             surface['alignment'] = 'first matched odometry pose and first map->odom transform; fixed for entire run'
             np.savez_compressed(self.output/'map_world.npz',points=world)
@@ -336,8 +338,8 @@ def main():
             raise RuntimeError('Webots port 1234 is occupied; stop that simulation first') from error
     output=(args.output or ROOT/'experiment_data/sil'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')).resolve()
     output.mkdir(parents=True,exist_ok=False)
-    criteria=json.loads((ROOT/'config/sil_criteria.json').read_text())
-    manifest=json.loads((ROOT/'src/thaiquiri_webots/webots_world/protos/cerro_rico/manifest.json').read_text())
+    criteria=json.loads(CRITERIA.read_text())
+    manifest=json.loads((MINE_ASSETS/'manifest.json').read_text())
     # Source ZIPs have no Git metadata. Do not accidentally report a parent
     # repository's revision when an archive is unpacked inside another checkout.
     git_revision = None; git_dirty = None
@@ -357,21 +359,23 @@ def main():
               'imu_filter_gain':args.imu_filter_gain,
               'source_sha256':manifest['source_sha256'],'git_revision':git_revision,
               'git_dirty':git_dirty,
-              'criteria_sha256':hashlib.sha256((ROOT/'config/sil_criteria.json').read_bytes()).hexdigest(),
+              'criteria_sha256':hashlib.sha256(CRITERIA.read_bytes()).hexdigest(),
               'world':'cerro_rico.wbt','random_seed':42,'ros_domain_id':args.domain_id,
               'webots':subprocess.check_output([str(Path(os.environ['WEBOTS_HOME'])/'webots'),'--version'],text=True).strip(),
               'ros':os.environ.get('ROS_DISTRO'),
               'implementation_sha256':{str(path.relative_to(ROOT)):hashlib.sha256(path.read_bytes()).hexdigest()
-                  for pattern in ('scripts/*.py','src/thaiquiri_webots/thaiquiri_webots/*.py',
-                                  'src/thaiquiri_webots/launch/*.py','src/thaiquiri_webots/resource/*.urdf',
-                                  'src/thaiquiri_webots/webots_world/protos/*.proto',
-                                  'src/thaiquiri_webots/webots_world/worlds/cerro_rico.wbt')
+                  for pattern in ('tools/evaluation/*.py','src/thaqhiri_*/thaqhiri_*/*.py',
+                                  'src/thaqhiri_*/launch/*.py',
+                                  'src/thaqhiri_description/urdf/*.urdf',
+                                  'src/thaqhiri_sim_webots/resource/*.urdf',
+                                  'src/thaqhiri_sim_webots/protos/*.proto',
+                                  'src/thaqhiri_sim_webots/worlds/cerro_rico.wbt')
                   for path in ROOT.glob(pattern)}}
     rclpy.init();node=rclpy.create_node('sil_trial')
     trial=Trial(node,output,criteria,args.control_mode,args.desired_speed_limit)
     processes=[];logs=[];failure=None
     try:
-        launch=['ros2','launch','thaiquiri_webots','drone_launch.py','world:=cerro_rico.wbt',
+        launch=['ros2','launch','thaqhiri_bringup','thaqhiri_sim.launch.py','world:=cerro_rico.wbt',
                 'icp_max_translation:='+str(args.icp_max_translation),
                 'imu_filter_gain:='+str(args.imu_filter_gain),
                 'gui:=false','rtabmap_viz:=false','database_path:='+str(output/'rtabmap.db')]
@@ -379,7 +383,7 @@ def main():
         processes.append(subprocess.Popen(launch,stdout=log,stderr=subprocess.STDOUT,start_new_session=True))
         env=os.environ.copy();env['WEBOTS_HOME']='/opt/ros/jazzy';env['WEBOTS_CONTROLLER_URL']='ipc://1234/SILObserver'
         log=(output/'observer.log').open('w');logs.append(log)
-        processes.append(subprocess.Popen(['ros2','run','thaiquiri_webots','sil_observer','--ros-args',
+        processes.append(subprocess.Popen(['ros2','run','thaqhiri_sim_webots','sil_observer','--ros-args',
                            '-p','lights_on:='+str(args.scenario=='nominal').lower(),
                            '-p','headlight_on:='+str(args.headlight=='on').lower()],
                            env=env,stdout=log,stderr=subprocess.STDOUT,start_new_session=True))

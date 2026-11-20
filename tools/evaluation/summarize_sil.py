@@ -7,7 +7,7 @@ from pathlib import Path
 import shutil
 
 import numpy as np
-from thaiquiri_webots.sil_metrics import trajectory_error
+from thaqhiri_navigation.sil_metrics import trajectory_error
 
 
 def polyline(points, color):
@@ -85,7 +85,7 @@ def plot_map(run, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('runs', type=Path, nargs='+')
-    parser.add_argument('--output', type=Path, default=Path('validation/cerro_rico'))
+    parser.add_argument('--output', type=Path, default=Path('docs/simulation/validation/cerro_rico'))
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     results = []
