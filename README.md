@@ -87,7 +87,7 @@ The current Madgwick gain is **0.01**. Previous tests showed that the earlier ga
 
 ## Stereo Vision and LiDAR
 
-The robot contains two upright 640 × 480 cameras with a **5 cm stereo baseline** (`camera_left` on the vehicle's left, standard positive disparity). Webots images are converted from BGRA to BGR, and the camera calibration information is corrected before being sent to `stereo_image_proc`.
+The robot contains two upright 640 × 480 cameras with a **5 cm stereo baseline** (`camera_left` on the vehicle's left, standard positive disparity), published at **12.5 Hz** by default (`camera_rate`). Webots images are converted from BGRA to BGR, and the camera calibration information is corrected before being sent to `stereo_image_proc`.
 
 The stereo processing produces rectified images and disparity data.
 
@@ -97,9 +97,10 @@ The simulated LiDAR provides:
 - approximately 59° vertical field of view,
 - 40 vertical layers,
 - 1000 horizontal samples,
-- 0.1–40 m range.
+- 0.1–40 m range,
+- 10 Hz scans.
 
-Although it is labelled as a Livox sensor, it behaves as a conventional rotating Webots LiDAR and does not reproduce Livox's real non-repetitive scanning pattern.
+Although it is labelled as a Livox sensor, it does not reproduce Livox's real non-repetitive scanning pattern. It is a Webots `fixed` LiDAR: each 360° scan is captured at a single instant, so a moving drone produces no in-scan motion distortion. A `rotating` Webots LiDAR gives the same cloud but costs about 10× more rendering (see [Performance](#performance)).
 
 ## RTAB-Map Mapping
 
@@ -176,7 +177,7 @@ src/
   thaqhiri_perception/    IMU merger, Madgwick, stereo_image_proc, RTAB-Map
                           (perception.launch.py, slam.launch.py)
   thaqhiri_navigation/    teleop, SIL route/metrics, ArduPilot bridges
-  thaqhiri_bringup/       thaqhiri_sim.launch.py composes everything above
+  thaqhiri_bringup/       thaqhiri_sim.launch.py composes everything above; rviz/ config
   third_party/ardupilot_msgs/   vendored ArduPilot interfaces (GPL-3.0)
 docker/                   Dockerfile.sim, Dockerfile.ardupilot_sitl, compose, entrypoint
   platforms/              per-host compose settings (linux, wsl, windows)
@@ -210,39 +211,69 @@ Important modules:
 Frame conventions and known REP-105 deviations are documented in
 [docs/architecture/frames_and_tf.md](docs/architecture/frames_and_tf.md).
 
-## Quickstart
+## Running the simulation
 
-Docker (from the repository root). `HOST_PLATFORM` selects the host setup in
-[docker/platforms/](docker/platforms):
+### 1. Choose a mode
 
-| `HOST_PLATFORM` | Host | Webots runs | Run compose from |
-|---|---|---|---|
-| `linux` (default) | Native Linux, X11, NVIDIA | in the container | Linux shell (`xhost +local:` first) |
-| `wsl` | Windows + Docker Desktop | in the container, window via WSLg, GPU via D3D12 | the WSL distro shell (e.g. Ubuntu) |
-| `windows` | Windows + Docker Desktop | natively on Windows | the WSL distro shell |
+| Mode | Host | Webots runs | ROS 2 runs | Run `docker compose` from |
+|---|---|---|---|---|
+| `HOST_PLATFORM=linux` (default) | Linux, X11, NVIDIA | in the container | in the container | a Linux shell, after `xhost +local:` |
+| `HOST_PLATFORM=wsl` | Windows + Docker Desktop (WSL2) | in the container; window via WSLg, GPU via D3D12 | in the container | the WSL distro shell (e.g. Ubuntu) |
+| `HOST_PLATFORM=windows` | Windows + Docker Desktop (WSL2) | natively on Windows | in the container, connected over TCP | the WSL distro shell |
+| native | Ubuntu 24.04, ROS 2 Jazzy, Webots R2025a | on the host | on the host | (no Docker) |
+
+The per-host Compose settings live in [docker/platforms/](docker/platforms).
+`HOST_PLATFORM` is applied when the container is created: to switch modes, run
+`up -d` again with the new value and Compose recreates the container.
+
+### 2. Start the container (Docker modes)
+
+From the repository root:
 
 ```bash
+# linux
+xhost +local:
+docker compose -f docker/docker-compose.sim.yml up -d --build
+
+# wsl or windows (from the WSL distro shell)
 HOST_PLATFORM=wsl docker compose -f docker/docker-compose.sim.yml up -d --build
+HOST_PLATFORM=windows docker compose -f docker/docker-compose.sim.yml up -d --build
+
+# open a shell in the container (any mode; `docker exec -it thaqhiri_sim_dev_env bash` also works)
 docker compose -f docker/docker-compose.sim.yml exec thaqhiri_sim bash
-# inside the container
-colcon build --symlink-install
-source install/setup.bash
-ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py
 ```
 
-With `HOST_PLATFORM=windows`, start Webots R2025a on Windows before the launch
-(it opens the world from this checkout and listens on port 1234):
+Inside the container `/home/ubuntu/ros_ws` is this checkout:
+
+```bash
+colcon build --symlink-install
+source install/setup.bash
+```
+
+### 3. Launch
+
+**linux / wsl.** The launch starts Webots, the ROS 2 stack, RViz2 and RTAB-Map's viewer:
+
+```bash
+ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py                         # test arena
+ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py world:=cerro_rico.wbt   # Cerro Rico mine
+```
+
+**windows.** Start Webots R2025a on Windows first (cmd or PowerShell, from the
+repository root). It opens the world from this checkout and listens on port 1234:
 
 ```bat
 tools\webots_host\start_webots.cmd cerro_rico.wbt
 ```
 
-The container sets `THAQHIRI_WEBOTS_HOST=host.docker.internal`, so the launch
-connects to that Webots over TCP instead of starting its own; `world` and `gui`
-are then chosen on the Windows side. Allow Webots through the Windows firewall
-if prompted.
+Then launch in the container exactly as above. The container sets
+`THAQHIRI_WEBOTS_HOST=host.docker.internal`, so the launch connects to that
+Webots over TCP instead of starting its own; `world` and `gui` are chosen on the
+Windows side. Allow Webots through the Windows firewall if prompted. Reset the
+simulation in Webots (`Ctrl+Shift+T`) before launching again, so the drone
+starts from its initial pose.
 
-Native ROS 2 Jazzy + Webots R2025a:
+**native.** Use the pinned Python requirements:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
@@ -253,12 +284,138 @@ source install/setup.bash
 ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py
 ```
 
-Launch arguments: `world` (`mine_test_arena.wbt` or `cerro_rico.wbt`), `gui`, `webots_host`
-(running Webots to connect to; empty starts one), `rtabmap`, `rtabmap_viz`, `database_path`,
-`imu_filter_gain`, `icp_max_translation`, `icp_odom_args`.
-Fly with `ros2 run thaqhiri_navigation teleop_drone` in another terminal.
+**Fly** from another terminal (in Docker, open a second shell with `exec`):
 
-Tests run per package: `colcon test --packages-select thaqhiri_sim_webots thaqhiri_perception thaqhiri_navigation && colcon test-result --verbose`.
+```bash
+ros2 run thaqhiri_navigation teleop_drone
+```
+
+| Key | Command on `/cmd_pos` |
+|---|---|
+| `t` / `b` | climb / descend |
+| `i` / `,` | forward / backward |
+| `j` / `l` | left / right |
+| `u` `o` `m` `.` | diagonals |
+| `y` / `n` | yaw left / right |
+| any other key | stop |
+
+### 4. Parameters
+
+#### Launch arguments (`thaqhiri_bringup thaqhiri_sim.launch.py`)
+
+| Argument | Default | Effect | Example |
+|---|---|---|---|
+| `world` | `mine_test_arena.wbt` | World from `thaqhiri_sim_webots/worlds`. Ignored when `webots_host` is set. | `world:=cerro_rico.wbt` |
+| `gui` | `true` | Webots window. `false` runs Webots without rendering, minimized (a display is still needed). Ignored when `webots_host` is set. | `gui:=false` |
+| `rviz` | `true` | RViz2 with [rviz/thaqhiri_sim.rviz](src/thaqhiri_bringup/rviz/thaqhiri_sim.rviz): drone model, LiDAR scan, RTAB-Map cloud, ICP odometry and the rectified left image. The fixed frame is `map`, or `base_footprint` with `rtabmap:=false`. | `rviz:=false` |
+| `rtabmap` | `true` | RTAB-Map with ICP odometry, started once the drone controller connects. | `rtabmap:=false` |
+| `rtabmap_viz` | `true` | RTAB-Map's own viewer. | `rtabmap_viz:=false` |
+| `camera_rate` | `12.5` | Stereo camera rate in Hz. Webots rounds the period to a multiple of the 8 ms step: `25` = 40 ms, `12.5` = 80 ms, `10` = 96 ms (10.4 Hz). More frames for stereo/RTAB-Map cost simulation speed. | `camera_rate:=25` |
+| `webots_host` | `$THAQHIRI_WEBOTS_HOST` (empty) | Connect over TCP (port 1234) to a Webots already running on this host instead of starting one. | `webots_host:=192.168.1.20` |
+| `database_path` | `~/.ros/rtabmap.db` | RTAB-Map database; deleted at every start. | `database_path:=/tmp/trial1.db` |
+| `imu_filter_gain` | `0.01` | Madgwick gain; `0.1` is the old tuning. | `imu_filter_gain:=0.1` |
+| `icp_max_translation` | `0.2` | Largest ICP correction accepted (m). | `icp_max_translation:=0.3` |
+| `icp_odom_args` | ICP tuning in `thaqhiri_sim.launch.py` | Replaces all RTAB-Map ICP odometry arguments (including `icp_max_translation`). | `icp_odom_args:="--Icp/VoxelSize 0.05 --Icp/MaxTranslation 0.2"` |
+
+Common combinations:
+
+```bash
+# fastest: no Webots rendering and no viewers
+ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py gui:=false rviz:=false rtabmap_viz:=false
+# watch Webots only
+ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py rviz:=false rtabmap_viz:=false
+# sensors and flight control only, no SLAM
+ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py rtabmap:=false
+# Cerro Rico, 25 Hz cameras, separate database
+ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py world:=cerro_rico.wbt camera_rate:=25 database_path:=/tmp/cerro.db
+```
+
+Each package launch file also runs on its own:
+
+| Launch file | Arguments |
+|---|---|
+| `thaqhiri_sim_webots sim_webots.launch.py` | `world`, `gui`, `webots_host`, `camera_rate` |
+| `thaqhiri_description description.launch.py` | `use_sim_time` |
+| `thaqhiri_perception perception.launch.py` | `use_sim_time`, `imu_filter_gain` |
+| `thaqhiri_perception slam.launch.py` | `use_sim_time`, `database_path`, `rtabmap_viz`, `icp_max_translation`, `icp_odom_args` |
+
+#### Environment variables
+
+| Variable | Default | Effect | Example |
+|---|---|---|---|
+| `HOST_PLATFORM` | `linux` | Compose host settings, `docker/platforms/<value>.yml`. | `HOST_PLATFORM=wsl docker compose -f docker/docker-compose.sim.yml up -d` |
+| `WSL_GPU_ADAPTER` | `NVIDIA` | wsl/windows: GPU used by Mesa's D3D12 driver (part of the adapter name). | `WSL_GPU_ADAPTER=AMD HOST_PLATFORM=wsl docker compose -f docker/docker-compose.sim.yml up -d` |
+| `DISPLAY`, `WAYLAND_DISPLAY` | host values (linux); `:0`, `wayland-0` (wsl/windows) | Where GUI windows open. | |
+| `THAQHIRI_WEBOTS_HOST` | empty; `host.docker.internal` with `HOST_PLATFORM=windows` | Default for `webots_host`. | `THAQHIRI_WEBOTS_HOST= ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py` (start Webots in the container instead) |
+| `ROS_DOMAIN_ID` | `0` in the container | DDS domain. | `ROS_DOMAIN_ID=5 ros2 launch ...` |
+| `WEBOTS_HOME` | `/usr/local/webots` in the container | Webots installation. On Windows, `start_webots.cmd` otherwise reads it from the registry. | `set WEBOTS_HOME=D:\Webots` |
+
+#### Webots on Windows (`tools\webots_host\start_webots.cmd`)
+
+`start_webots.cmd [world] [Webots options]`: `world` defaults to
+`mine_test_arena.wbt`; any further options are passed to Webots unchanged.
+The port is always 1234.
+
+```bat
+tools\webots_host\start_webots.cmd cerro_rico.wbt
+:: run as fast as possible instead of real time
+tools\webots_host\start_webots.cmd cerro_rico.wbt --mode=fast
+:: no 3D view (Windows-side equivalent of gui:=false)
+tools\webots_host\start_webots.cmd cerro_rico.wbt --no-rendering --minimize
+```
+
+#### Simulation model settings (files)
+
+| Setting | File | Value |
+|---|---|---|
+| Physics/control step | `worlds/*.wbt` (`basicTimeStep`) | 8 ms: controller and Cube IMU at 125 Hz |
+| IMU and altimeter rates | `resource/webots_plugins.urdf.xacro` | Cube IMU 125 Hz, Livox IMU 10 Hz, altimeter 10 Hz |
+| Camera rate | `resource/webots_plugins.urdf.xacro` (`camera_rate` xacro argument) | 12.5 Hz, set by the launch argument |
+| LiDAR | `protos/ThaqhiriDrone.proto` (`lidar_livox`) | `fixed`, 360° × 59°, 1000 × 40, 10 Hz |
+
+#### Other nodes and tools
+
+| Command | Parameters / options |
+|---|---|
+| `ros2 run thaqhiri_navigation odom_to_ardupilot` (experimental) | `odom_topic` (`/drone/odom`), `tf_topic` (`/ap/tf`), `parent_frame` (`odom`), `child_frame` (`base_footprint`), e.g. `--ros-args -p parent_frame:=map` |
+| `ros2 run thaqhiri_sim_webots sil_observer` (started by the SIL runner) | `lights_on` (`true`), `headlight_on` (`true`) |
+| `tools/evaluation/run_sil.sh` (builds, then runs Cerro Rico headless) | `--scenario nominal\|low_light`, `--headlight on\|off`, `--control-mode odometry\|ground_truth\|hover` (the last two are diagnostic), `--output DIR` (default `experiment_data/sil/<UTC time>`), `--wall-timeout 900`, `--domain-id 73`, `--desired-speed-limit 0.2`, `--icp-max-translation 0.2`, `--imu-filter-gain 0.01` |
+| `python3 tools/evaluation/summarize_sil.py RUN...` | `--output` (default `docs/simulation/validation/cerro_rico`) |
+| `python3 tools/evaluation/replay_attitude.py RUN...` | `--output DIR` (required) |
+
+```bash
+tools/evaluation/run_sil.sh --scenario low_light --headlight off --output experiment_data/sil/low_light_1
+```
+
+See [docs/simulation/cerro_rico_sil.md](docs/simulation/cerro_rico_sil.md) for the SIL procedure.
+
+### Performance
+
+Webots physics takes about 0.2 ms per 8 ms step; the cost is sensor rendering,
+the Webots window and, in `windows` mode, streaming images over Docker's TCP link.
+Real-time factor (simulated s per wall s) with the full stack and RTAB-Map on,
+measured on the development machine (Windows 11, NVIDIA GPU, Docker Desktop):
+
+| Mode, world | Viewers | Before: cameras every step (125 Hz), rotating LiDAR | Now: 12.5 Hz cameras, fixed LiDAR |
+|---|---|---|---|
+| `wsl`, arena | Webots, RViz, rtabmap_viz (defaults) | – | 0.078 |
+| `wsl`, arena | Webots only | 0.013 | 0.079 |
+| `wsl`, arena | none (`gui:=false rviz:=false rtabmap_viz:=false`) | 0.026 | 0.260 |
+| `wsl`, Cerro Rico | defaults | – | 0.221 |
+| `wsl`, Cerro Rico | none | 0.028 | 0.277 |
+| `windows`, arena | RViz, rtabmap_viz | – | 0.387 |
+| `windows`, arena | none (Webots minimized) | 0.050 | 0.382 |
+| `windows`, Cerro Rico | none | – | 0.417 |
+
+- In `wsl` mode the Webots window is the main cost; RViz2 and rtabmap_viz are not.
+- `camera_rate:=25` lowers the headless `wsl` arena from 0.260 to 0.230.
+- `windows` mode is fastest because Webots renders natively on the GPU.
+
+### Tests
+
+```bash
+colcon test --packages-select thaqhiri_sim_webots thaqhiri_perception thaqhiri_navigation && colcon test-result --verbose
+```
 
 ## License
 

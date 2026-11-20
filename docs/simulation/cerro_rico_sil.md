@@ -144,7 +144,8 @@ ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py world:=cerro_rico.wbt
 ```
 
 Use `rtabmap:=false` for sensor-only operation, `rtabmap_viz:=false` to suppress
-RTAB-Map's GUI, and `gui:=false` to minimize Webots (a display is still needed).
+RTAB-Map's GUI, `rviz:=false` to skip RViz2, and `gui:=false` to run Webots without
+rendering (minimized; a display is still needed). The SIL runner sets all three viewers off.
 The initial controller target is a **0.5 m altimeter reading**, approximately
 the sensor's resting elevation on the fixture; use teleop `t` to climb. The SIL
 runner issues its own altitude commands.
@@ -171,7 +172,8 @@ for map evaluation. Re-export and rebuild after editing the Blender source.
 ## What is under test
 
 The system under test is the repository's **active Python flight controller**,
-four Webots propellers, stereo cameras, rotating LiDAR, Cube IMU processing,
+four Webots propellers, stereo cameras (12.5 Hz), a 360° LiDAR (Webots `fixed` type;
+results recorded before that change used the `rotating` type), Cube IMU processing,
 an onboard lamp, and RTAB-Map with ICP odometry. This is software-in-the-loop
 simulation of that architecture, **not ArduPilot SITL**: the alternate ArduPilot driver and an
 external autopilot firmware are not exercised.
