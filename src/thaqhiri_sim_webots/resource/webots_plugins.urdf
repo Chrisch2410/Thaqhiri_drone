@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<!-- Webots-only driver configuration, loaded by WebotsController.
+     Geometry and TF live in thaqhiri_description/urdf/thaqhiri.urdf. -->
+<robot name="thaqhiri">
+  <webots>
+        <plugin type="thaqhiri_sim_webots.drone_driver.DroneDriver" />
+        <plugin type="webots_ros2_driver::Ros2IMU">
+            <enabled>True</enabled>
+            <updateRate>10</updateRate>
+            <alwaysOn>True</alwaysOn>
+            <topicName>/drone/livox/gyro</topicName>
+            <frameName>gyro_livox</frameName>
+            <gyroName>gyro_livox</gyroName>
+        </plugin>
+        <plugin type="webots_ros2_driver::Ros2IMU">
+            <enabled>True</enabled>
+            <updateRate>10</updateRate>
+            <alwaysOn>True</alwaysOn>
+            <topicName>/drone/livox/acc</topicName>
+            <frameName>accelerometer_livox</frameName>
+            <accelerometerName>accelerometer_livox</accelerometerName>
+        </plugin>
+        <plugin type="webots_ros2_driver::Ros2IMU">
+            <enabled>True</enabled>
+            <updateRate>125</updateRate>
+            <alwaysOn>True</alwaysOn>
+            <topicName>/drone/cube/gyro</topicName>
+            <frameName>gyro_cube</frameName>
+            <gyroName>gyro_cube</gyroName>
+        </plugin>
+        <plugin type="webots_ros2_driver::Ros2IMU">
+            <enabled>True</enabled>
+            <updateRate>125</updateRate>
+            <alwaysOn>True</alwaysOn>
+            <topicName>/drone/cube/acc</topicName>
+            <frameName>accelerometer_cube</frameName>
+            <accelerometerName>accelerometer_cube</accelerometerName>
+        </plugin>
+          <device reference="altimeter_cube" type="Altimeter">
+            <ros>
+                <enabled>true</enabled>
+                <updateRate>10</updateRate>
+                <topicName>/altimeter_cube</topicName>
+                <alwaysOn>true</alwaysOn>
+            </ros>
+        </device>
+  </webots>
+</robot>
