@@ -1,19 +1,20 @@
 """Launch the full Thaqhiri simulation with a shared simulation clock."""
 
+import os
+
 from launch import LaunchDescription
 from launch.actions import (
-    DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, RegisterEventHandler)
+    DeclareLaunchArgument, ExecuteProcess, GroupAction, IncludeLaunchDescription,
+    RegisterEventHandler)
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessIO
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution
 
 from launch_ros.substitutions import FindPackageShare
 
-from webots_ros2_driver.webots_controller import WebotsController
-
 # Same marker webots_ros2_driver's WaitForControllerConnection waits for. That
-# helper needs the WebotsController object, which lives in sim_webots.launch.py.
+# helper needs the controller action, which lives in sim_webots.launch.py.
 CONTROLLER_CONNECTED = 'Controller successfully connected to robot in Webots simulation.'
 
 
@@ -26,6 +27,14 @@ def _include(package, launch_file, arguments):
     )])
 
 
+def _is_webots_controller(action):
+    # Matches both the upstream WebotsController (local Webots) and the TCP
+    # controller process sim_webots.launch.py starts for a remote Webots.
+    details = getattr(action, 'process_details', None)
+    return (isinstance(action, ExecuteProcess) and details is not None
+            and os.path.basename(details['cmd'][0]) == 'webots-controller')
+
+
 def _start_when_controller_connects(actions):
     def on_stderr(event):
         if CONTROLLER_CONNECTED in event.text.decode():
@@ -33,7 +42,7 @@ def _start_when_controller_connects(actions):
         return None
 
     return RegisterEventHandler(OnProcessIO(
-        target_action=lambda action: isinstance(action, WebotsController),
+        target_action=_is_webots_controller,
         on_stderr=on_stderr,
     ))
 
@@ -55,6 +64,10 @@ def generate_launch_description():
         DeclareLaunchArgument('gui', default_value='true'),
         DeclareLaunchArgument('world', default_value='mine_test_arena.wbt',
                               description='World filename, e.g. cerro_rico.wbt'),
+        DeclareLaunchArgument(
+            'webots_host',
+            default_value=EnvironmentVariable('THAQHIRI_WEBOTS_HOST', default_value=''),
+            description='Host of an already running Webots; empty starts it locally'),
         DeclareLaunchArgument('database_path', default_value='~/.ros/rtabmap.db'),
         DeclareLaunchArgument('rtabmap_viz', default_value='true'),
         DeclareLaunchArgument(
@@ -83,6 +96,7 @@ def generate_launch_description():
         _include('thaqhiri_sim_webots', 'sim_webots.launch.py', {
             'world': LaunchConfiguration('world'),
             'gui': LaunchConfiguration('gui'),
+            'webots_host': LaunchConfiguration('webots_host'),
         }),
         _include('thaqhiri_description', 'description.launch.py', {
             'use_sim_time': 'true',

@@ -230,3 +230,10 @@ DEF drone ThaqhiriDrone {
   rotation 0.5773509358554485 0.5773489358556708 0.5773509358554485 2.0944
   controller "<extern>"
 }
+# Clock/supervisor bridge for webots_ros2 (sim_webots.launch.py). Kept in the
+# world so a Webots started outside ROS (e.g. natively on Windows) has it too.
+Robot {
+  name "Ros2Supervisor"
+  controller "<extern>"
+  supervisor TRUE
+}

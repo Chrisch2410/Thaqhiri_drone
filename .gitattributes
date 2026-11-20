@@ -1,2 +1,4 @@
 # Shell scripts run inside Linux containers from a (possibly Windows) checkout.
 *.sh text eol=lf
+# Batch scripts run on Windows; cmd.exe mis-parses labels/goto with LF endings.
+*.cmd text eol=crlf
