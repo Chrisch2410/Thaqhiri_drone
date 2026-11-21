@@ -179,13 +179,17 @@ src/
   thaqhiri_navigation/    teleop, SIL route/metrics, ArduPilot bridges
   thaqhiri_bringup/       thaqhiri_sim.launch.py composes everything above; rviz/ config
   third_party/ardupilot_msgs/   vendored ArduPilot interfaces (GPL-3.0)
-docker/                   Dockerfile.sim, Dockerfile.ardupilot_sitl, compose, entrypoint
+compose.yaml              simulation container (docker compose up); settings in .env
+.env.example              template for .env: host platform, world, launch arguments
+start_windows.cmd         Windows: native Webots + the container in one double-click
+docker/                   Dockerfile.sim, Dockerfile.ardupilot_sitl, entrypoint
+  bin/                    container commands: build, sim
   platforms/              per-host compose settings (linux, wsl, windows)
   python/                 container fix: webots_ros2 must not treat Docker Desktop as WSL
 tools/evaluation/         SIL runner, criteria, summaries, attitude replay
 tools/blender/            Cerro Rico Blender -> Webots exporter
 tools/env/                pinned Python requirements for a native setup
-tools/webots_host/        start Webots natively on Windows (HOST_PLATFORM=windows)
+tools/webots_host/        Windows-side scripts used by start_windows.cmd
 docs/                     simulation reports and architecture notes
 ```
 
@@ -213,81 +217,72 @@ Frame conventions and known REP-105 deviations are documented in
 
 ## Running the simulation
 
-### 1. Choose a mode
-
-| Mode | Host | Webots runs | ROS 2 runs | Run `docker compose` from |
-|---|---|---|---|---|
-| `HOST_PLATFORM=linux` (default) | Linux, X11, NVIDIA | in the container | in the container | a Linux shell, after `xhost +local:` |
-| `HOST_PLATFORM=wsl` | Windows + Docker Desktop (WSL2) | in the container; window via WSLg, GPU via D3D12 | in the container | the WSL distro shell (e.g. Ubuntu) |
-| `HOST_PLATFORM=windows` | Windows + Docker Desktop (WSL2) | natively on Windows | in the container, connected over TCP | the WSL distro shell |
-| native | Ubuntu 24.04, ROS 2 Jazzy, Webots R2025a | on the host | on the host | (no Docker) |
-
-The per-host Compose settings live in [docker/platforms/](docker/platforms).
-`HOST_PLATFORM` is applied when the container is created: to switch modes, run
-`up -d` again with the new value and Compose recreates the container.
-
-### 2. Start the container (Docker modes)
+### Start
 
 From the repository root:
 
-```bash
-# linux
-xhost +local:
-docker compose -f docker/docker-compose.sim.yml up -d --build
+| Host | Webots runs | Start | Once |
+|---|---|---|---|
+| Ubuntu + NVIDIA GPU | in Docker | `docker compose up` | `xhost +local:` after each login |
+| Windows + Docker Desktop | natively on Windows (fastest) | double-click `start_windows.cmd`, or `start_windows.cmd cerro_rico.wbt` | install Webots R2025a on Windows |
+| Windows + Docker Desktop | in Docker, windows through WSLg | `docker compose up` (PowerShell, cmd or a WSL shell) | `.env` with `HOST_PLATFORM=wsl` |
 
-# wsl or windows (from the WSL distro shell)
-HOST_PLATFORM=wsl docker compose -f docker/docker-compose.sim.yml up -d --build
-HOST_PLATFORM=windows docker compose -f docker/docker-compose.sim.yml up -d --build
+The container builds the workspace (incremental colcon build) and launches the
+stack: Webots with the drone on its pad, sensors, RTAB-Map, RViz2 and RTAB-Map's
+viewer. Nothing flies or runs tests on its own; the drone takes commands once the
+log shows `Controller successfully connected` (about 45 s; the very first
+`docker compose up` also builds the image, which takes several minutes).
+Ctrl+C stops everything; `start_windows.cmd` also closes Webots and starts
+Docker Desktop if it is not running.
 
-# open a shell in the container (any mode; `docker exec -it thaqhiri_sim_dev_env bash` also works)
-docker compose -f docker/docker-compose.sim.yml exec thaqhiri_sim bash
+### Settings (`.env`)
+
+Copy `.env.example` to `.env` and edit it. Without `.env` the defaults below apply.
+
+| Setting | Default | Effect |
+|---|---|---|
+| `HOST_PLATFORM` | `linux` | `linux` (Ubuntu) or `wsl` (Windows, Webots in Docker). `start_windows.cmd` sets `windows` itself. |
+| `WORLD` | `mine_test_arena.wbt` | `mine_test_arena.wbt` or `cerro_rico.wbt`; also used by `start_windows.cmd` |
+| `SIM_ARGS` | empty | Extra [launch arguments](#launch-arguments-thaqhiri_bringup-thaqhiri_simlaunchpy), space-separated |
+| `SIM_AUTOSTART` | `true` | `false`: the container only builds; launch by hand with `sim` |
+| `WSL_GPU_ADAPTER` | `NVIDIA` | Windows: GPU used for OpenGL (part of the adapter name, e.g. `AMD`, `Intel`) |
+
+```ini
+# .env: Windows, everything in Docker, Cerro Rico, no viewers
+HOST_PLATFORM=wsl
+WORLD=cerro_rico.wbt
+SIM_ARGS=rviz:=false rtabmap_viz:=false
 ```
 
-Inside the container `/home/ubuntu/ros_ws` is this checkout:
+After changing `.env`, run `docker compose up` again; Compose recreates the container.
+
+### Develop
+
+`src/` is mounted live into the container; `build/`, `install/` and `log/` live in
+the `thaqhiri_workspace` Docker volume, not in the checkout.
 
 ```bash
-colcon build --symlink-install
-source install/setup.bash
+docker compose restart          # after editing src/: rebuild and relaunch
+docker compose exec sim bash    # shell in the running container, workspace sourced
 ```
 
-### 3. Launch
+Commands in that shell:
 
-**linux / wsl.** The launch starts Webots, the ROS 2 stack, RViz2 and RTAB-Map's viewer:
+| Command | Does |
+|---|---|
+| `build` | Incremental `colcon build --symlink-install` of `~/ros_ws`, then re-sources it. Extra arguments go to colcon: `build --packages-select thaqhiri_sim_webots` |
+| `sim` | Launches the stack with the `.env` settings; extra launch arguments override them: `sim world:=cerro_rico.wbt rviz:=false`. Use it with `SIM_AUTOSTART=false`, otherwise a stack is already running. |
+| `ros2 run thaqhiri_navigation teleop_drone` | Fly (keys below) |
+| `cd ~/ros_ws && colcon test --packages-select thaqhiri_sim_webots && colcon test-result --verbose` | Tests |
+
+With `start_windows.cmd`, `docker compose restart` reconnects to the Webots that
+is still open without resetting the world; run `start_windows.cmd` again for a
+fresh one.
+
+### Fly
 
 ```bash
-ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py                         # test arena
-ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py world:=cerro_rico.wbt   # Cerro Rico mine
-```
-
-**windows.** Start Webots R2025a on Windows first (cmd or PowerShell, from the
-repository root). It opens the world from this checkout and listens on port 1234:
-
-```bat
-tools\webots_host\start_webots.cmd cerro_rico.wbt
-```
-
-Then launch in the container exactly as above. The container sets
-`THAQHIRI_WEBOTS_HOST=host.docker.internal`, so the launch connects to that
-Webots over TCP instead of starting its own; `world` and `gui` are chosen on the
-Windows side. Allow Webots through the Windows firewall if prompted. Reset the
-simulation in Webots (`Ctrl+Shift+T`) before launching again, so the drone
-starts from its initial pose.
-
-**native.** Use the pinned Python requirements:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r tools/env/requirements.txt
-python -m colcon build --symlink-install --packages-up-to thaqhiri_bringup
-source install/setup.bash
-ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py
-```
-
-**Fly** from another terminal (in Docker, open a second shell with `exec`):
-
-```bash
-ros2 run thaqhiri_navigation teleop_drone
+docker compose exec sim bash -ic "ros2 run thaqhiri_navigation teleop_drone"
 ```
 
 | Key | Command on `/cmd_pos` |
@@ -299,7 +294,20 @@ ros2 run thaqhiri_navigation teleop_drone
 | `y` / `n` | yaw left / right |
 | any other key | stop |
 
-### 4. Parameters
+### Without Docker
+
+Ubuntu 24.04 with ROS 2 Jazzy and Webots R2025a, using the pinned Python requirements:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r tools/env/requirements.txt
+python -m colcon build --symlink-install --packages-up-to thaqhiri_bringup
+source install/setup.bash
+ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py
+```
+
+### Parameters
 
 #### Launch arguments (`thaqhiri_bringup thaqhiri_sim.launch.py`)
 
@@ -317,18 +325,21 @@ ros2 run thaqhiri_navigation teleop_drone
 | `icp_max_translation` | `0.2` | Largest ICP correction accepted (m). | `icp_max_translation:=0.3` |
 | `icp_odom_args` | ICP tuning in `thaqhiri_sim.launch.py` | Replaces all RTAB-Map ICP odometry arguments (including `icp_max_translation`). | `icp_odom_args:="--Icp/VoxelSize 0.05 --Icp/MaxTranslation 0.2"` |
 
-Common combinations:
+Common combinations, as `SIM_ARGS` in `.env` or as arguments of `sim` in the container:
 
-```bash
+```ini
 # fastest: no Webots rendering and no viewers
-ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py gui:=false rviz:=false rtabmap_viz:=false
+SIM_ARGS=gui:=false rviz:=false rtabmap_viz:=false
 # watch Webots only
-ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py rviz:=false rtabmap_viz:=false
+SIM_ARGS=rviz:=false rtabmap_viz:=false
 # sensors and flight control only, no SLAM
-ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py rtabmap:=false
-# Cerro Rico, 25 Hz cameras, separate database
-ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py world:=cerro_rico.wbt camera_rate:=25 database_path:=/tmp/cerro.db
+SIM_ARGS=rtabmap:=false
+# 25 Hz cameras, separate database
+SIM_ARGS=camera_rate:=25 database_path:=/tmp/cerro.db
 ```
+
+Values containing spaces (`icp_odom_args`) only work as `sim` arguments:
+`sim icp_odom_args:="--Icp/VoxelSize 0.05"`.
 
 Each package launch file also runs on its own:
 
@@ -339,22 +350,22 @@ Each package launch file also runs on its own:
 | `thaqhiri_perception perception.launch.py` | `use_sim_time`, `imu_filter_gain` |
 | `thaqhiri_perception slam.launch.py` | `use_sim_time`, `database_path`, `rtabmap_viz`, `icp_max_translation`, `icp_odom_args` |
 
-#### Environment variables
+#### Environment variables (inside the container)
 
 | Variable | Default | Effect | Example |
 |---|---|---|---|
-| `HOST_PLATFORM` | `linux` | Compose host settings, `docker/platforms/<value>.yml`. | `HOST_PLATFORM=wsl docker compose -f docker/docker-compose.sim.yml up -d` |
-| `WSL_GPU_ADAPTER` | `NVIDIA` | wsl/windows: GPU used by Mesa's D3D12 driver (part of the adapter name). | `WSL_GPU_ADAPTER=AMD HOST_PLATFORM=wsl docker compose -f docker/docker-compose.sim.yml up -d` |
-| `DISPLAY`, `WAYLAND_DISPLAY` | host values (linux); `:0`, `wayland-0` (wsl/windows) | Where GUI windows open. | |
-| `THAQHIRI_WEBOTS_HOST` | empty; `host.docker.internal` with `HOST_PLATFORM=windows` | Default for `webots_host`. | `THAQHIRI_WEBOTS_HOST= ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py` (start Webots in the container instead) |
-| `ROS_DOMAIN_ID` | `0` in the container | DDS domain. | `ROS_DOMAIN_ID=5 ros2 launch ...` |
-| `WEBOTS_HOME` | `/usr/local/webots` in the container | Webots installation. On Windows, `start_webots.cmd` otherwise reads it from the registry. | `set WEBOTS_HOME=D:\Webots` |
+| `THAQHIRI_WEBOTS_HOST` | empty; `host.docker.internal` with `start_windows.cmd` | Default for `webots_host`. | `THAQHIRI_WEBOTS_HOST= sim` (start Webots in the container instead) |
+| `DISPLAY`, `WAYLAND_DISPLAY` | host value (linux); `:0`, `wayland-0` (Windows) | Where GUI windows open. | |
+| `ROS_DOMAIN_ID` | `0` | DDS domain. | `ROS_DOMAIN_ID=5 sim` |
+| `WEBOTS_HOME` | `/usr/local/webots` | Webots installation. On Windows, `start_webots.cmd` otherwise reads it from the registry. | `set WEBOTS_HOME=D:\Webots` |
 
 #### Webots on Windows (`tools\webots_host\start_webots.cmd`)
 
+`start_windows.cmd` runs this script; call it directly to pass Webots options.
 `start_webots.cmd [world] [Webots options]`: `world` defaults to
 `mine_test_arena.wbt`; any further options are passed to Webots unchanged.
-The port is always 1234.
+The port is always 1234. Then start the container with
+`set HOST_PLATFORM=windows` and `docker compose up` (cmd).
 
 ```bat
 tools\webots_host\start_webots.cmd cerro_rico.wbt
@@ -384,7 +395,8 @@ tools\webots_host\start_webots.cmd cerro_rico.wbt --no-rendering --minimize
 | `python3 tools/evaluation/replay_attitude.py RUN...` | `--output DIR` (required) |
 
 ```bash
-tools/evaluation/run_sil.sh --scenario low_light --headlight off --output experiment_data/sil/low_light_1
+# inside the container (the checkout is at ~/thaqhiri); with SIM_AUTOSTART=false
+~/thaqhiri/tools/evaluation/run_sil.sh --scenario low_light --headlight off --output experiment_data/sil/low_light_1
 ```
 
 See [docs/simulation/cerro_rico_sil.md](docs/simulation/cerro_rico_sil.md) for the SIL procedure.
@@ -413,8 +425,10 @@ measured on the development machine (Windows 11, NVIDIA GPU, Docker Desktop):
 
 ### Tests
 
+In the container (`docker compose exec sim bash`):
+
 ```bash
-colcon test --packages-select thaqhiri_sim_webots thaqhiri_perception thaqhiri_navigation && colcon test-result --verbose
+cd ~/ros_ws && colcon test --packages-select thaqhiri_sim_webots thaqhiri_perception thaqhiri_navigation && colcon test-result --verbose
 ```
 
 ## License
