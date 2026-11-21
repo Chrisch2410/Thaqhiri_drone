@@ -11,3 +11,6 @@ __pycache__/
 # Local runs (tools/evaluation/run_sil.py, RTAB-Map databases)
 experiment_data/
 *.db
+
+# Local settings for docker compose (template: .env.example)
+.env

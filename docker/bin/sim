@@ -1,0 +1,10 @@
+#!/bin/bash
+# Launch the simulation stack with the .env settings (WORLD, SIM_ARGS):
+#   sim                                  as configured
+#   sim world:=cerro_rico.wbt rviz:=false  extra launch arguments win over .env
+source /opt/ros/jazzy/setup.bash
+source "$HOME/ros_ws/install/setup.bash"
+# SIM_ARGS is a space-separated list of name:=value launch arguments.
+# shellcheck disable=SC2086
+exec ros2 launch thaqhiri_bringup thaqhiri_sim.launch.py \
+  "world:=${WORLD:-mine_test_arena.wbt}" $SIM_ARGS "$@"

@@ -1,5 +1,5 @@
-# Build from the repository root:
-#   docker compose -f docker/docker-compose.sim.yml build
+# Build from the repository root (docker compose up builds it when missing):
+#   docker compose build
 FROM osrf/ros:jazzy-desktop
 
 # Evitar prompts interactivos
@@ -80,17 +80,23 @@ RUN apt-get update && apt-get install -y sudo \
 
 USER $USERNAME
 
-# Configuración del entorno en .bashrc
+# Workspace: sources are bind-mounted into src/, a named volume keeps build/
+# install/ log/; created here so that volume starts owned by this user.
+RUN mkdir -p /home/$USERNAME/ros_ws/src
+
+# Configuración del entorno en .bashrc; build re-sources the workspace overlay.
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /home/$USERNAME/.bashrc && \
     echo "export ROS_DOMAIN_ID=0" >> /home/$USERNAME/.bashrc && \
     echo "export ROS_LOCALHOST_ONLY=0" >> /home/$USERNAME/.bashrc && \
     echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> /home/$USERNAME/.bashrc && \
-    echo "alias inst_r='source install/setup.bash'" >> /home/$USERNAME/.bashrc && \
-    echo "export WEBOTS_HOME=/usr/local/webots" >> /home/$USERNAME/.bashrc
+    echo "export WEBOTS_HOME=/usr/local/webots" >> /home/$USERNAME/.bashrc && \
+    echo '[ -f ~/ros_ws/install/setup.bash ] && source ~/ros_ws/install/setup.bash' >> /home/$USERNAME/.bashrc && \
+    echo 'build() { command build "$@" && source ~/ros_ws/install/setup.bash; }' >> /home/$USERNAME/.bashrc
 
 # Volver a root para manejar el entrypoint
 USER root
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY docker/bin/build docker/bin/sim /usr/local/bin/
+RUN chmod +x /entrypoint.sh /usr/local/bin/build /usr/local/bin/sim
 
 ENTRYPOINT [ "/entrypoint.sh" ]

@@ -27,9 +27,13 @@ if [[ -z "${WEBOTS_HOME:-}" || ! -x "$WEBOTS_HOME/webots" ]]; then
   exit 1
 fi
 
+# The Docker image builds in its own workspace (THAQHIRI_WS) to keep build
+# artifacts out of the checkout; elsewhere the checkout is the workspace.
+cd "${THAQHIRI_WS:-$project_dir}"
 python3 -c 'from colcon_core.command import main; raise SystemExit(main())' build --symlink-install \
   --packages-up-to thaqhiri_bringup \
   --cmake-args "-DPython3_EXECUTABLE=$(command -v python3)" \
                "-DPYTHON_EXECUTABLE=$(command -v python3)"
 source install/setup.bash
+cd "$project_dir"
 exec python3 tools/evaluation/run_sil.py "$@"

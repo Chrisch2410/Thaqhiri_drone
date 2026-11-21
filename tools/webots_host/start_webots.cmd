@@ -1,6 +1,7 @@
 @echo off
 rem Start Webots natively on Windows for HOST_PLATFORM=windows: ROS 2 runs in
 rem Docker and its controllers connect to this Webots over TCP (port 1234).
+rem start_windows.cmd (repository root) calls this and then starts the container.
 rem
 rem Usage: tools\webots_host\start_webots.cmd [world.wbt] [extra webots args]
 rem   world defaults to mine_test_arena.wbt (src\thaqhiri_sim_webots\worlds).

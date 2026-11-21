@@ -1,13 +1,15 @@
-# HOST_PLATFORM=wsl: Windows + Docker Desktop (WSL2 backend). Run compose from
-# the WSL distro shell (e.g. Ubuntu) so these paths are that distro's WSLg
-# sockets and GPU libraries. GUI windows appear on the Windows desktop.
+# HOST_PLATFORM=wsl: Windows + Docker Desktop (WSL2 backend), Webots in the
+# container. Run compose from PowerShell, cmd or a WSL shell: WSLg is mounted
+# from both places below (only the one matching where compose runs has the
+# sockets) and docker/entrypoint.sh links the live one to /tmp/.X11-unix and
+# /tmp/wslg. GUI windows appear on the Windows desktop.
 services:
   platform:
     environment:
-      - DISPLAY=${DISPLAY:-:0}
-      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
-      - XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir
-      - PULSE_SERVER=/mnt/wslg/PulseServer
+      - DISPLAY=:0
+      - WAYLAND_DISPLAY=wayland-0
+      - XDG_RUNTIME_DIR=/tmp/wslg/runtime-dir
+      - PULSE_SERVER=/tmp/wslg/PulseServer
       # Hardware OpenGL through Mesa's D3D12 driver; without it Mesa falls back
       # to llvmpipe (CPU). Set WSL_GPU_ADAPTER to match another GPU vendor.
       - LD_LIBRARY_PATH=/usr/lib/wsl/lib
@@ -16,6 +18,6 @@ services:
     devices:
       - "/dev/dxg:/dev/dxg"
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix
-      - /mnt/wslg:/mnt/wslg
+      - /run/desktop/mnt/host/wslg:/wslg/desktop   # compose run from Windows
+      - /mnt/wslg:/wslg/distro                     # compose run from a WSL shell
       - /usr/lib/wsl:/usr/lib/wsl:ro

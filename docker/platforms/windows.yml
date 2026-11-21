@@ -1,6 +1,6 @@
-# HOST_PLATFORM=windows: Webots runs natively on Windows
-# (tools/webots_host/start_webots.cmd); ROS 2 in this container connects to it
-# over TCP. Same WSLg/GPU setup as wsl.yml for RViz/rtabmap_viz windows.
+# HOST_PLATFORM=windows: Webots runs natively on Windows and ROS 2 in this
+# container connects to it over TCP. start_windows.cmd sets this mode, opens
+# Webots and runs compose. Same WSLg/GPU setup as wsl.yml for RViz/rtabmap_viz.
 services:
   platform:
     extends:

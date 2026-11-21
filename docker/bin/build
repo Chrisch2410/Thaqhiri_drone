@@ -1,0 +1,8 @@
+#!/bin/bash
+# Incremental build of the container workspace (~/ros_ws, sources in ~/ros_ws/src).
+#   build                                       everything
+#   build --packages-select thaqhiri_sim_webots any extra colcon build arguments
+set -e
+source /opt/ros/jazzy/setup.bash
+cd "$HOME/ros_ws"
+colcon build --symlink-install "$@"

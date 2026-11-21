@@ -1,0 +1,77 @@
+# Simulation container. From the repository root:
+#
+#   docker compose up              build, launch the simulation, show its log (Ctrl+C stops)
+#   docker compose restart         rebuild the workspace and relaunch after editing src/
+#   docker compose exec sim bash   shell with the workspace sourced: build, sim, ros2 ...
+#
+# Settings come from .env (see .env.example): HOST_PLATFORM picks the host setup in
+# docker/platforms/ (linux, wsl); WORLD, SIM_ARGS and SIM_AUTOSTART shape the launch.
+# Windows with Webots running natively: start_windows.cmd instead of compose.
+# ArduPilot SITL is opt-in: docker compose --profile ardupilot up
+name: thaqhiri
+
+services:
+  sim:
+    extends:
+      file: docker/platforms/${HOST_PLATFORM:-linux}.yml
+      service: platform
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.sim
+    image: thaqhiri_sim
+    container_name: thaqhiri_sim
+    networks:
+      - drone_net
+    privileged: true
+    user: "ubuntu"
+    working_dir: /home/ubuntu/ros_ws
+    tty: true
+    stdin_open: true
+    # tini forwards Ctrl+C / docker stop to ros2 launch, which shuts the stack down.
+    init: true
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+    environment:
+      - ROS_DOMAIN_ID=0
+      - QT_X11_NO_MITSHM=1
+      - WEBOTS_HOME=/usr/local/webots
+      - SITL_UDP_IP=ardupilot_sitl
+      - WORLD=${WORLD:-mine_test_arena.wbt}
+      - SIM_ARGS=${SIM_ARGS:-}
+      - SIM_AUTOSTART=${SIM_AUTOSTART:-true}
+      # tools/evaluation/run_sil.sh builds here instead of in the checkout.
+      - THAQHIRI_WS=/home/ubuntu/ros_ws
+    volumes:
+      # Workspace volume (build/, install/, log/) with the live sources mounted into it.
+      - workspace:/home/ubuntu/ros_ws
+      - ./src:/home/ubuntu/ros_ws/src
+      # Whole checkout for tools/ (SIL runner) and docs/.
+      - .:/home/ubuntu/thaqhiri
+      - webots_config:/home/ubuntu/.config/Cyberbotics
+
+  ardupilot_sitl:
+    profiles: ["ardupilot"]
+    build:
+      context: docker
+      dockerfile: Dockerfile.ardupilot_sitl
+    image: ardupilot_sitl
+    container_name: ardupilot_sitl_dev_env
+    working_dir: /home/ubuntu/ros_ws
+    command: tail -F anything
+    environment:
+      - ROS_LOCALHOST_ONLY=0
+      - ROS_DOMAIN_ID=0
+    networks:
+      - drone_net
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      # ArduPilot workspace checked out next to this repository.
+      - ../ardu_ws:/home/ubuntu/ros_ws
+
+volumes:
+  workspace:
+  webots_config:
+
+networks:
+  drone_net:
+    driver: bridge
